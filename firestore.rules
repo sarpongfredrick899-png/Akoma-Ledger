@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 2. Entity Validations
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['id', 'userId', 'date', 'description', 'amount', 'type', 'category', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.id is string &&
+             data.date is string &&
+             data.description is string &&
+             data.amount is number &&
+             data.type in ['income', 'expense', 'credit'] &&
+             data.category is string &&
+             data.timestamp is int &&
+             (data.keys().size() <= 16); // allow for optional fields like product, quantity, rawText
+    }
+
+    function isValidProductCost(data) {
+      return data.keys().hasAll(['userId', 'name', 'costPrice']) &&
+             data.userId == request.auth.uid &&
+             data.name is string &&
+             data.costPrice is number &&
+             data.keys().size() == 3;
+    }
+
+    // 1. Master Gates
+    match /transactions/{transactionId} {
+      allow get, list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(transactionId) && isValidTransaction(incoming());
+      allow update: if isSignedIn() && isValidTransaction(incoming()) && 
+                      incoming().userId == existing().userId &&
+                      incoming().id == existing().id;
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    match /productCosts/{productId} {
+      allow get, list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(productId) && isValidProductCost(incoming());
+      allow update: if isSignedIn() && isValidProductCost(incoming()) && 
+                      incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}

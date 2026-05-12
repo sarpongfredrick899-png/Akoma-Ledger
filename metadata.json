@@ -1,0 +1,6 @@
+{
+  "name": "The Akoma Ledger",
+  "description": "Voice-automated income statement for entrepreneurs. Capture transactions naturally using AI to eliminate manual entry friction.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["Voice AI Financial Parsing", "Income Statement Automation", "Digital Ledger Management"]
+}
