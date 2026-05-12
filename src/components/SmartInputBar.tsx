@@ -11,11 +11,12 @@ interface SmartInputBarProps {
 
 export default function SmartInputBar({ onTransactionCaptured }: SmartInputBarProps) {
   const [isRecording, setIsRecording] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [preview, setPreview] = useState<Partial<Transaction> | null>(null);
   const recognitionRef = useRef<any>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isStartedRef = useRef(false);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -23,34 +24,69 @@ export default function SmartInputBar({ onTransactionCaptured }: SmartInputBarPr
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
-      // Note: SpeechRecognition doesn't explicitly 'support' these by name in standard API, 
-      // but standard recognition handles various accents. We set lang to en-GH as a base.
       recognitionRef.current.lang = 'en-GH'; 
 
+      recognitionRef.current.onstart = () => {
+        setIsRecording(true);
+        isStartedRef.current = true;
+        setError(null);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsRecording(false);
+        isStartedRef.current = false;
+      };
+
       recognitionRef.current.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const transcriptText = event.results[current][0].transcript;
-        setInputText(transcriptText);
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        
+        // Exact transcription update
+        setInputText(transcript);
+        
+        // Clear any previous error on success
+        if (transcript.trim()) {
+          setError(null);
+        }
       };
 
       recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
         setIsRecording(false);
+        isStartedRef.current = false;
+        
+        if (event.error === 'not-allowed') {
+          setError('Microphone access blocked. Please click the lock icon in your browser address bar and "Allow" the microphone to continue.');
+          console.error('Microphone access denied:', event.error);
+        } else if (event.error === 'aborted') {
+          console.warn('Recognition aborted');
+        } else if (event.error === 'no-speech') {
+          // No speech detected - don't treat as a scary system error, but give feedback
+          setError("Listening timed out. Tap the mic and speak when you're ready.");
+          console.info('No speech detected during session');
+        } else if (event.error === 'audio-capture') {
+          setError("Microphone not detected. Please ensure it is plugged in correctly.");
+        } else {
+          console.error('Speech recognition technical error:', event.error);
+          setError(`Speech intelligence interrupted: ${event.error}. Please try again.`);
+        }
       };
     }
 
     return () => {
-      if (recognitionRef.current) {
+      if (recognitionRef.current && isStartedRef.current) {
         recognitionRef.current.stop();
       }
     };
   }, []);
 
-  const handleAIPreview = useCallback(async (text: string) => {
-    if (text.length < 5) {
-      setPreview(null);
-      return;
-    }
+  /**
+   * Neural Analysis Engine
+   * Processes the natural language input when the user explicitly submits.
+   */
+  const handleAIPreview = async (text: string) => {
+    if (text.length < 5) return;
     
     setIsProcessing(true);
     const parsed = await parseFinancialStatement(text);
@@ -58,47 +94,36 @@ export default function SmartInputBar({ onTransactionCaptured }: SmartInputBarPr
       setPreview(parsed);
     }
     setIsProcessing(false);
-  }, []);
-
-  useEffect(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (inputText && !isRecording) {
-      timeoutRef.current = setTimeout(() => {
-        handleAIPreview(inputText);
-      }, 1000);
-    } else {
-      setPreview(null);
-    }
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [inputText, isRecording, handleAIPreview]);
+  };
 
   /**
    * Toggles the voice recording state.
-   * Includes error handling for microphone access permissions.
+   * Includes error handling for microphone access permissions and state conflicts.
    */
   const toggleRecording = () => {
+    if (!recognitionRef.current) {
+      setError('Speech recognition is not supported in this browser. Please use Chrome.');
+      return;
+    }
+
     try {
-      if (isRecording) {
-        recognitionRef.current?.stop();
-        setIsRecording(false);
+      if (isStartedRef.current) {
+        recognitionRef.current.stop();
       } else {
-        // Reset state before starting new recording
+        setError(null);
         setInputText('');
         setPreview(null);
-        
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-          setIsRecording(true);
-        } else {
-          throw new Error('Speech recognition not supported in this browser environment.');
-        }
+        recognitionRef.current.start();
       }
-    } catch (error) {
-      console.error('Microphone access denied or error:', error);
-      setIsRecording(false);
-      // Optional: alert user or show error state
+    } catch (err: any) {
+      if (err.name === 'InvalidStateError') {
+        console.warn('Speech engine already in requested state.');
+      } else {
+        console.error('Speech Engine failure:', err);
+        setError('System error: Failed to engage microphone. Ensure no other apps are using it.');
+        setIsRecording(false);
+        isStartedRef.current = false;
+      }
     }
   };
 
@@ -238,7 +263,7 @@ export default function SmartInputBar({ onTransactionCaptured }: SmartInputBarPr
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !isProcessing && handleAIPreview(inputText)}
-            placeholder={isRecording ? "Listening for English or Twi..." : "Record new business transaction..."}
+            placeholder={isRecording ? "Listening to your closest voice..." : "Record business transaction (speak clearly)..."}
             className="flex-1 bg-transparent border-none outline-none text-white text-lg px-2 placeholder:text-white/15 font-light"
           />
 
@@ -269,15 +294,27 @@ export default function SmartInputBar({ onTransactionCaptured }: SmartInputBarPr
         </div>
 
         {/* Enterprise Metadata */}
-        <div className="mt-4 flex flex-wrap justify-center gap-x-6 gap-y-2 px-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-gold/40 animate-pulse" />
-            <span className="text-[9px] uppercase tracking-[0.2em] text-white/20 font-bold">Neural Engine Active</span>
-          </div>
-          <div className="flex gap-4 text-[9px] uppercase tracking-[0.15em] text-white/10 font-bold">
-            <span>English</span>
-            <span>•</span>
-            <span>Twi</span>
+        <div className="mt-4 flex flex-col items-center gap-2 px-4">
+          {error && (
+            <motion.p 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[10px] text-rose-500 font-bold uppercase tracking-widest bg-rose-500/5 px-4 py-1.5 rounded-full border border-rose-500/10 mb-2"
+            >
+              {error}
+            </motion.p>
+          )}
+          
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-brand-gold/40 animate-pulse" />
+              <span className="text-[9px] uppercase tracking-[0.2em] text-white/20 font-bold">Neural Engine Active</span>
+            </div>
+            <div className="flex gap-4 text-[9px] uppercase tracking-[0.15em] text-white/10 font-bold">
+              <span>English</span>
+              <span>•</span>
+              <span>Twi</span>
+            </div>
           </div>
         </div>
       </div>
