@@ -1,4 +1,4 @@
-// Mock Firebase to use LocalStorage
+// Mock Authentication using LocalStorage
 export const auth = {
   currentUser: null as any,
   onAuthStateChanged: (callback: (user: any) => void) => {

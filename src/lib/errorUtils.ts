@@ -8,5 +8,5 @@ export enum OperationType {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  console.error(`Mock Ledger Error [${operationType}] on ${path}:`, error);
+  console.error(`Mock Data Error [${operationType}] on ${path}:`, error);
 }
