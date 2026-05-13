@@ -240,10 +240,6 @@ export default function App() {
     const grossProfit = isRevenueType ? revenue - directCost : 0;
     const netProfit = isRevenueType ? grossProfit : -parsed.amount;
 
-    const transactionsRef = collection(db, 'transactions');
-    const newDocRef = doc(transactionsRef);
-    const id = newDocRef.id;
-
     const transaction = {
       ...parsed,
       id: Math.random().toString(36).substring(7),

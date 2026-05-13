@@ -2,6 +2,7 @@ export type TransactionType = 'income' | 'expense' | 'credit';
 
 export interface Transaction {
   id: string;
+  userId?: string;
   date: string;
   description: string;
   amount: number;

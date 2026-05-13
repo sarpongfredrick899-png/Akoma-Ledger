@@ -1,7 +1,14 @@
+export type User = {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  emailVerified: boolean;
+};
+
 // Mock Authentication using LocalStorage
 export const auth = {
-  currentUser: null as any,
-  onAuthStateChanged: (callback: (user: any) => void) => {
+  currentUser: null as User | null,
+  onAuthStateChanged: (callback: (user: User | null) => void) => {
     const savedUser = localStorage.getItem('akoma_mock_user');
     const user = savedUser ? JSON.parse(savedUser) : null;
     auth.currentUser = user;
@@ -13,13 +20,16 @@ export const auth = {
 export const db = {};
 export const googleProvider = {};
 
+export const collection = (db: any, path: string) => path;
+export const doc = (db: any, path: string, id: string) => `${path}/${id}`;
+
 export const signOut = async () => {
   localStorage.removeItem('akoma_mock_user');
   window.location.reload();
 };
 
-export const signInWithPopup = async () => {
-  const mockUser = {
+export const signInWithPopup = async (authObj: any, provider: any) => {
+  const mockUser: User = {
     uid: 'mock-user-123',
     displayName: 'Growth Partner',
     email: 'partner@akoma.systems',
@@ -29,8 +39,8 @@ export const signInWithPopup = async () => {
   window.location.reload();
 };
 
-export const signInWithEmailAndPassword = async (a: any, email: string) => {
-  const mockUser = {
+export const signInWithEmailAndPassword = async (authObj: any, email: string, password?: string) => {
+  const mockUser: User = {
     uid: 'mock-user-123',
     displayName: email.split('@')[0],
     email: email,
@@ -40,8 +50,8 @@ export const signInWithEmailAndPassword = async (a: any, email: string) => {
   window.location.reload();
 };
 
-export const createUserWithEmailAndPassword = async (a: any, email: string) => {
-  const mockUser = {
+export const createUserWithEmailAndPassword = async (authObj: any, email: string, password?: string) => {
+  const mockUser: User = {
     uid: 'mock-user-123',
     displayName: email.split('@')[0],
     email: email,
@@ -51,6 +61,6 @@ export const createUserWithEmailAndPassword = async (a: any, email: string) => {
   window.location.reload();
 };
 
-export const sendPasswordResetEmail = async () => {
+export const sendPasswordResetEmail = async (authObj: any, email: string) => {
   return Promise.resolve();
 };
