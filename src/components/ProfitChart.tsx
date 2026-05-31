@@ -7,6 +7,7 @@ interface ProfitChartProps {
 
 export default function ProfitChart({ transactions }: ProfitChartProps) {
   const data = transactions
+    .filter(t => t.type === 'income' || t.type === 'credit')
     .sort((a, b) => a.timestamp - b.timestamp)
     .slice(-10)
     .map(t => ({
